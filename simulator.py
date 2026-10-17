@@ -2,32 +2,62 @@ import json
 import random
 import time
 from datetime import datetime
+from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 
-DEVICE_ID = "sensor_greenhouse_01"
+# --- CẤU HÌNH THÔNG SỐ (THAY THẾ BẰNG THÔNG TIN CỦA BẠN) ---
+ENDPOINT = "auagqaduhejbq-ats.iot.us-east-1.amazonaws.com"  # Thay bằng IoT Endpoint từ Settings
+CLIENT_ID = "sensor_greenhouse_01"
+PATH_TO_CERT = "certs/device-certificate.pem.crt"
+PATH_TO_KEY = "certs/private.pem.key"
+PATH_TO_ROOT_CA = "certs/AmazonRootCA1.pem"
+TOPIC_DATA = "greenhouse/sensors/data"
+TOPIC_CONTROL = "greenhouse/pump/control"
 
-def generate_sensor_data():
-    """Giả lập dữ liệu cảm biến nông nghiệp"""
-    soil_moisture = round(random.uniform(18.0, 55.0), 2)
-    temperature = round(random.uniform(24.0, 38.0), 2)
-    humidity = round(random.uniform(50.0, 85.0), 2)
-    
-    payload = {
-        "device_id": DEVICE_ID,
-        "timestamp": int(time.time()),
-        "datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "soil_moisture": soil_moisture,
-        "temperature": temperature,
-        "humidity": humidity
-    }
-    return payload
+# Callback khi nhận được lệnh điều khiển máy bơm từ Lambda/Cloud
+def on_message_received(client, userdata, message):
+    payload = json.loads(message.payload.decode('utf-8'))
+    print(f"\n[RECEIVED MQTT COMMAND] <- Topic '{message.topic}':")
+    print(json.dumps(payload, indent=2))
+    print(f">>> HỆ THỐNG GIẢ LẬP: Thực hiện hành động -> {payload.get('action')} trong {payload.get('duration_sec', 0)}s <<<\n")
 
-if __name__ == "__main__":
-    print(f"=== BẮT ĐẦU CHẠY THIẾT BỊ GIẢ LẬP ({DEVICE_ID}) ===")
-    print("Nhấn Ctrl+C để dừng script khi không làm việc.\n")
-    try:
-        while True:
-            data = generate_sensor_data()
-            print(f"[SEND MQTT] -> Topic 'greenhouse/sensors/data': {json.dumps(data)}")
-            time.sleep(10) # Gửi dữ liệu định kỳ 10s/lần
-    except KeyboardInterrupt:
-        print("\n=== ĐÃ DỪNG GIẢ LẬP ===")
+# Khởi tạo MQTT Client
+mqtt_client = AWSIoTMQTTClient(CLIENT_ID)
+mqtt_client.configureEndpoint(ENDPOINT, 8883)
+mqtt_client.configureCredentials(PATH_TO_ROOT_CA, PATH_TO_KEY, PATH_TO_CERT)
+
+# Cấu hình kết nối
+mqtt_client.configureAutoReconnectBackoffTime(1, 32, 20)
+mqtt_client.configureOfflinePublishQueueing(-1)
+mqtt_client.configureDrainingFrequency(2)
+mqtt_client.configureConnectDisconnectTimeout(10)
+mqtt_client.configureMQTTOperationTimeout(5)
+
+print("Đang kết nối tới AWS IoT Core...")
+mqtt_client.connect()
+print("Kết nối thành công!")
+
+# Subscribe lệnh điều khiển máy bơm
+mqtt_client.subscribe(TOPIC_CONTROL, 1, on_message_received)
+
+try:
+    while True:
+        # Giả lập thông số
+        soil_moisture = round(random.uniform(18.0, 50.0), 2)
+        temperature = round(random.uniform(25.0, 38.0), 2)
+        humidity = round(random.uniform(50.0, 80.0), 2)
+        
+        telemetry = {
+            "device_id": CLIENT_ID,
+            "timestamp": int(time.time()),
+            "datetime_utc": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "soil_moisture": soil_moisture,
+            "temperature": temperature,
+            "humidity": humidity
+        }
+        
+        mqtt_client.publish(TOPIC_DATA, json.dumps(telemetry), 1)
+        print(f"[PUBLISH MQTT] -> Topic '{TOPIC_DATA}': Soil Moisture={soil_moisture}% | Temp={temperature}°C")
+        time.sleep(10)
+except KeyboardInterrupt:
+        print("\nNgắt kết nối AWS IoT Core...")
+        mqtt_client.disconnect()
