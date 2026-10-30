@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Smart Agriculture IoT Infrastructure Automation (Week 3)
+
+Resources:
+  # Bảng DynamoDB
+  SoilIrrigationHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: SoillrrigationHistory
+      AttributeDefinitions:
+        - AttributeName: device_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: device_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl_timestamp
+        Enabled: true
+
+  # SNS Topic Cảnh báo
+  IrrigationAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: IrrigationAlertTopic
+
+  # Hàm Lambda Xử lý
+  IrrigationDecisionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: fn_irrigation_decision
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.9
+      CodeUri: ./
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref SoilIrrigationHistoryTable
+          SNS_TOPIC_ARN: !Ref IrrigationAlertTopic
+
+  # AWS IoT Rule
+  IoTRouteToLambdaRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: Rule_RouteToLambda
+      TopicRulePayload:
+        Sql: "SELECT * FROM 'greenhouse/sensors/data'"
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt IrrigationDecisionFunction.Arn
+        RuleDisabled: false
