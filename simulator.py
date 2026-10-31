@@ -42,10 +42,16 @@ mqtt_client.subscribe(TOPIC_CONTROL, 1, on_message_received)
 try:
     while True:
         # Giả lập thông số
-        soil_moisture = round(random.uniform(18.0, 50.0), 2)
-        temperature = round(random.uniform(25.0, 38.0), 2)
-        humidity = round(random.uniform(50.0, 80.0), 2)
+        # soil_moisture = round(random.uniform(10.0, 60.0), 2)
+        # temperature = round(random.uniform(25.0, 38.0), 2)
+        # humidity = round(random.uniform(50.0, 80.0), 2)
         
+        # KỊCH BẢN 1: Độ ẩm đất rất thấp ( 20% < soil_moisture) -> Bật máy bơm, Gửi hộp thư email
+        soil_moisture = 15.0  # Cố định độ ẩm > 30%
+        temperature = 28.5
+        humidity = 65.0
+
+
         telemetry = {
             "device_id": CLIENT_ID,
             "timestamp": int(time.time()),

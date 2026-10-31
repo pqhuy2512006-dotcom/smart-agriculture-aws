@@ -7,7 +7,7 @@ Resources:
   SoilIrrigationHistoryTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: SoillrrigationHistory
+      TableName: SoilIrrigationHistory
       AttributeDefinitions:
         - AttributeName: device_id
           AttributeType: S
